@@ -1,0 +1,8 @@
+[package]
+name = "sim"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic single-player survival world and bot simulation"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

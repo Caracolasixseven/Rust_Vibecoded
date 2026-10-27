@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#171c18" />
+    <meta name="description" content="Ferrous: survival .io local con mundo y bots simulados en Rust/WASM." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23dc7946'/%3E%3Cpath d='M9 25V7h15v5H14v3h8v5h-8v5z' fill='%2320241f'/%3E%3C/svg%3E" />
+    <title>FERROUS — Local Survival</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+  </head>
+  <body class="is-title">
+    <main id="game-root">
+      <canvas id="game-canvas" aria-label="Mundo 3D de Ferrous"></canvas>
+      <div class="world-shade" aria-hidden="true"></div>
+      <div id="damage-flash" aria-hidden="true"></div>
+
+      <header id="topbar" class="play-ui">
+        <div class="brand-small"><span class="brand-mark">F</span><span>FERROUS</span><span class="server-tag">EU #04</span></div>
+        <div class="server-status" aria-label="Estado simulado del servidor">
+          <span class="status-dot"></span><strong id="online-count">41</strong><span>EN LÍNEA</span>
+          <span class="status-divider"></span><strong id="ping-value">32</strong><span>MS</span>
+          <span class="local-tag">SIMULACIÓN LOCAL</span>
+        </div>
+        <div class="top-actions">
+          <button id="mute-button" class="icon-button" type="button" aria-label="Silenciar audio" title="Audio (M)">
+            <svg class="sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5-1.5a6 6 0 010 9M15 10a3 3 0 010 4"/></svg>
+            <svg class="sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm12 1l5 5m0-5l-5 5"/></svg>
+          </button>
+          <button id="pause-button" class="icon-button" type="button" aria-label="Pausar partida" title="Pausa (P)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section id="survival-stats" class="play-ui" aria-label="Estadísticas de supervivencia">
+        <div class="stat-row health"><span>SALUD</span><div class="stat-track"><i id="health-bar"></i></div><strong id="health-value">100</strong></div>
+        <div class="stat-row hunger"><span>HAMBRE</span><div class="stat-track"><i id="hunger-bar"></i></div><strong id="hunger-value">100</strong></div>
+        <div class="stat-row thirst"><span>SED</span><div class="stat-track"><i id="thirst-bar"></i></div><strong id="thirst-value">100</strong></div>
+        <div class="stat-row temperature"><span>TEMP.</span><div class="stat-track"><i id="temperature-bar"></i></div><strong id="temperature-value">55</strong></div>
+      </section>
+
+      <aside id="leaderboard" class="play-ui panel" aria-label="Clasificación">
+        <div class="panel-heading"><span>CLASIFICACIÓN</span><small>TOP 10</small></div>
+        <ol id="leaderboard-list"></ol>
+        <div class="player-score"><span>TU PUNTUACIÓN</span><strong id="player-score">0</strong></div>
+      </aside>
+
+      <section id="chat-panel" class="play-ui panel" aria-label="Chat simulado">
+        <div class="panel-heading"><span>CHAT DE SALA</span><small>LOCAL</small></div>
+        <div id="chat-messages" role="log" aria-live="polite"></div>
+        <form id="chat-form">
+          <label class="sr-only" for="chat-input">Mensaje de chat</label>
+          <input id="chat-input" type="text" maxlength="120" autocomplete="off" placeholder="Escribe al chat…" />
+          <button type="submit" aria-label="Enviar mensaje">ENVIAR</button>
+        </form>
+      </section>
+
+      <div id="event-feed" class="play-ui" aria-live="polite"></div>
+      <div id="context-hint" class="play-ui">WASD para explorar · Espacio para atacar</div>
+      <div id="build-label" class="play-ui" hidden>MODO CONSTRUCCIÓN <strong id="build-kind">MURO</strong><span>Clic para colocar · Esc para cancelar</span></div>
+      <div id="aim-reticle" class="play-ui" aria-hidden="true"><i></i></div>
+
+      <section id="quickbar" class="play-ui" aria-label="Acciones rápidas">
+        <button type="button" data-action="gather"><kbd>E</kbd><span>RECOLECTAR</span></button>
+        <button type="button" data-action="attack" class="attack-action"><kbd>ESP</kbd><span>ATACAR</span></button>
+        <button type="button" data-action="eat:berry"><kbd>1</kbd><span>BAYAS</span><b id="berry-count">0</b></button>
+        <button type="button" data-action="eat:cooked_meat"><kbd>2</kbd><span>COCIDA</span><b id="cooked-count">0</b></button>
+        <button type="button" data-action="cook"><kbd>F</kbd><span>COCINAR</span></button>
+        <button type="button" data-action="drink"><kbd>Q</kbd><span>BEBER</span></button>
+      </section>
+
+      <nav id="dock" class="play-ui" aria-label="Paneles del juego">
+        <button id="inventory-button" type="button"><kbd>C</kbd><span>MOCHILA</span></button>
+        <button id="build-button" type="button"><kbd>B</kbd><span>CONSTRUIR</span></button>
+        <button id="mobile-chat-button" class="mobile-only" type="button" aria-label="Abrir chat">CHAT</button>
+        <button id="mobile-board-button" class="mobile-only" type="button" aria-label="Abrir clasificación">TOP</button>
+      </nav>
+
+      <section id="build-menu" class="play-ui" aria-label="Opciones de construcción" hidden>
+        <button type="button" data-build="wall"><span class="build-icon wall-icon"></span><strong>MURO</strong><small>8 madera</small></button>
+        <button type="button" data-build="door"><span class="build-icon door-icon"></span><strong>PUERTA</strong><small>12 madera</small></button>
+        <button type="button" data-build="campfire"><span class="build-icon fire-icon"></span><strong>HOGUERA</strong><small>10 madera · 6 piedra</small></button>
+      </section>
+
+      <div id="mobile-controls" class="play-ui mobile-only">
+        <div id="joystick" aria-label="Control de movimiento"><div id="joystick-knob"></div></div>
+        <div class="mobile-actions">
+          <button type="button" data-action="gather">E<small>USAR</small></button>
+          <button type="button" data-action="attack" class="mobile-attack">A<small>GOLPE</small></button>
+        </div>
+      </div>
+
+      <section id="inventory-panel" class="drawer" role="dialog" aria-modal="true" aria-labelledby="inventory-title" hidden>
+        <div class="drawer-header"><div><small>GESTIÓN DE RECURSOS</small><h2 id="inventory-title">MOCHILA Y FABRICACIÓN</h2></div><button class="close-button" type="button" data-close="inventory-panel" aria-label="Cerrar mochila">×</button></div>
+        <div class="inventory-layout">
+          <div><h3>INVENTARIO <span>12 ESPACIOS</span></h3><div id="inventory-grid"></div><p class="drawer-note">Las herramientas mejoran daño y recolección automáticamente.</p></div>
+          <div><h3>FABRICAR <span>RECETAS</span></h3><div id="recipe-list">
+            <button type="button" data-craft="stone_hatchet"><span class="recipe-symbol">H1</span><span><strong>Hacha de piedra</strong><small>6 madera · 4 piedra</small></span><b>FABRICAR</b></button>
+            <button type="button" data-craft="metal_hatchet"><span class="recipe-symbol">H2</span><span><strong>Hacha de metal</strong><small>4 madera · 6 metal · 8 piedra</small></span><b>FABRICAR</b></button>
+            <button type="button" data-craft="campfire"><span class="recipe-symbol">F</span><span><strong>Hoguera</strong><small>10 madera · 6 piedra</small></span><b>FABRICAR</b></button>
+            <button type="button" data-craft="wood_wall"><span class="recipe-symbol">W</span><span><strong>Muro de madera</strong><small>8 madera</small></span><b>FABRICAR</b></button>
+            <button type="button" data-craft="wood_door"><span class="recipe-symbol">D</span><span><strong>Puerta de madera</strong><small>12 madera</small></span><b>FABRICAR</b></button>
+          </div></div>
+        </div>
+      </section>
+
+      <section id="title-screen" class="overlay">
+        <div class="title-content">
+          <div class="title-status"><span class="status-dot"></span>SALA LOCAL DISPONIBLE <b>WASM / 20 HZ</b></div>
+          <h1>FERROUS<span>.IO</span></h1>
+          <p class="title-subtitle">SOBREVIVE. CONSTRUYE. NO CONFÍES EN NADIE.</p>
+          <p class="title-copy">Una sala viva de 40 supervivientes simulados. Farmea, fabrica y escala la clasificación antes de que la isla acabe contigo.</p>
+          <button id="start-button" class="primary-button" type="button" disabled><span id="start-label">CARGANDO MUNDO…</span><i>→</i></button>
+          <div class="title-controls"><span><kbd>WASD</kbd> MOVER</span><span><kbd>E</kbd> RECOLECTAR</span><span><kbd>ESPACIO</kbd> ATACAR</span><span><kbd>C</kbd> FABRICAR</span></div>
+          <p class="local-disclosure">Sin cuentas ni red. Los nombres, el chat y el estado en línea son simulados. Tu progreso se guarda solo en este navegador.</p>
+        </div>
+        <div class="title-world-label"><span>ISLA 07</span><b>120 × 120 M</b><small>SEMILLA PROCEDURAL</small></div>
+      </section>
+
+      <section id="pause-screen" class="overlay compact-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+        <div class="modal-card"><small>SIMULACIÓN DETENIDA</small><h2 id="pause-title">PAUSA</h2><p>El mundo espera. Tu progreso se guarda automáticamente en este navegador.</p><button id="resume-button" class="primary-button" type="button">VOLVER A LA ISLA <i>→</i></button><button id="reset-button" class="text-button danger" type="button">BORRAR PROGRESO Y REINICIAR</button></div>
+      </section>
+
+      <section id="death-screen" class="overlay compact-overlay" role="dialog" aria-modal="true" aria-labelledby="death-title" hidden>
+        <div class="modal-card death-card"><small>FIN DE LA PARTIDA</small><h2 id="death-title">NO SOBREVIVISTE</h2><p id="death-reason">La isla se cobra otra víctima.</p><div class="death-stats"><span>PUNTOS <b id="death-score">0</b></span><span>ELIMINACIONES <b id="death-kills">0</b></span><span>ESTRUCTURAS <b id="death-built">0</b></span></div><button id="respawn-button" class="primary-button" type="button">REAPARECER <i>→</i></button></div>
+      </section>
+
+      <section id="reset-confirm" class="overlay compact-overlay" role="dialog" aria-modal="true" aria-labelledby="reset-title" hidden>
+        <div class="modal-card"><small>ACCIÓN IRREVERSIBLE</small><h2 id="reset-title">¿BORRAR PROGRESO?</h2><p>Se eliminarán tu inventario, tus estructuras y tu posición guardados.</p><button id="confirm-reset-button" class="primary-button danger-fill" type="button">SÍ, EMPEZAR DE CERO</button><button id="cancel-reset-button" class="text-button" type="button">CANCELAR</button></div>
+      </section>
+
+      <div id="loading-error" class="overlay compact-overlay" role="alert" hidden><div class="modal-card"><h2>NO SE PUDO CARGAR WASM</h2><p>Sirve esta carpeta mediante HTTP y vuelve a intentarlo.</p><button id="reload-button" class="primary-button" type="button">REINTENTAR</button></div></div>
+    </main>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
